@@ -1,46 +1,90 @@
-# Getting Started with Create React App
+# redux, redux-saga 기초
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+- (참고) 동작확인 완료, api는 read만 가능해서 CRUD 확인은 불가
 
-## Available Scripts
+## takeEvery
 
-In the project directory, you can run:
+- 특정 redux action 이 dispatch 되는 것을 항상 감시
+- 또 다른 제너레이터를 실행 시키는 용도로 많이 사용
 
-### `npm start`
+```javascript
+function* watchGetUsersRequest() {
+  yield takeEvery(action.Types.GET_USERS_REQUEST, getUsers);
+}
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## takeLatest
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- takeEvery와 다른점은 계속된 요청이 있을 시 전 요청을 취소하고 마지막 요청을 처리한다는 점이다
 
-### `npm test`
+## take
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- 특정 redux action이 dispatch 되는 것을 바라본다.
+- 바라보는 action이 완료될 때까지 중복되는 action이 dispatch되는 것을 바라보는 것이 "blocking" 된다.
+- 하나의 트랜잭션이 끝나기 전에 또 시도가 되는 걸 막아야 하는 경우 사용(결제 같은 경우)
 
-### `npm run build`
+```javascript
+function* watchDeleteUserRequest() {
+  while (true) {
+    const { userId } = yield take(action.Types.DELETE_USER_REQUEST);
+    yield call(deleteUser, { userId });
+  }
+}
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## call
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- 함수 또는 promise 객체를 반환하는 통신이 resolve 되는 것을 기다릴 필요가 있을 때 사용
+- 제너레이터 함수도 동일하게 불려진 제너레이터 함수가 done 될 때까지 기다린다.
+- take과 함께 사용
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```javascript
+function* User() {
+  try {
+    yield call(getUsers);
+  } catch (e) {}
+}
+```
 
-### `npm run eject`
+## put
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+- saga 내부에서 redux action을 dispatch 하는 경우 사용
+- redux state(reducer의 action type => store update) 업데이트가 필요한 경우
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```javascript
+function* getUsers() {
+  try {
+    const result = yield call(api.getUsers);
+    yield put(
+      actions.getUsersSuccess({
+        users: result.data.users,
+      })
+    );
+  } catch (e) {}
+}
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## 흐름
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+컴포넌트에서
+액션을 실행시킴
 
-## Learn More
+액션의 타입과
+리듀서의 타입이 일치하는 부분 실행
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+리덕스 사가에서 매치되는 타입 실행
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+ex
+createUserRequest 액션을
+컴포넌트에서 dispatch
+
+리듀서 에서 스위치 구문에 해당 되는
+작업이 실행되거나 없으면 스킵
+
+takeLatest 로 바라보고 있는 제너레이터가
+있으므로 실행
+
+연결된 제너레이터가 실행
+
+제너레이터 안에서
+call통신, 또다른 put(dispatch)가능
